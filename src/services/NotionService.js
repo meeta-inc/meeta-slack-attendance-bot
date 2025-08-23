@@ -97,23 +97,25 @@ class NotionService {
         `• 일 평균: ${(monthlyTotalHours / workingDay).toFixed(1)}시간\n` +
         `\n✅ 퇴근 완료`;
       
-      // 첫 번째 작업에만 코멘트 추가 (중복 방지)
-      if (response.results.length > 0) {
-        const pageId = response.results[0].id;
-        
-        await this.notion.comments.create({
-          parent: { page_id: pageId },
-          rich_text: [
-            {
-              type: 'text',
-              text: {
-                content: commentContent
+      // 오늘 날짜의 모든 작업에 코멘트 추가
+      for (const page of response.results) {
+        try {
+          await this.notion.comments.create({
+            parent: { page_id: page.id },
+            rich_text: [
+              {
+                type: 'text',
+                text: {
+                  content: commentContent
+                }
               }
-            }
-          ]
-        });
-        
-        console.log(`작업 코멘트 추가 완료: ${pageId}`);
+            ]
+          });
+          
+          console.log(`작업 코멘트 추가 완료: ${page.id}`);
+        } catch (err) {
+          console.error(`코멘트 추가 실패 (${page.id}):`, err);
+        }
       }
     } catch (error) {
       console.error('Notion comment save error:', error);
