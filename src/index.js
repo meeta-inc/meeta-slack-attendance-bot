@@ -46,22 +46,33 @@ app.action('check_in', async ({ body, ack, client, logger }) => {
   
   try {
     const userId = body.user.id;
-    const result = await attendanceManager.checkIn(userId);
     
-    // 홈 뷰 업데이트
-    const todayStatus = await attendanceManager.getTodayStatus(userId);
-    const homeView = slackUI.getHomeView(userId, todayStatus);
+    // Notion에서 사용자 태스크 조회
+    const tasks = await notionService.getUserTasks(userId);
     
-    await client.views.publish({
-      user_id: userId,
-      view: homeView
-    });
-    
-    // 성공 메시지
-    await client.chat.postMessage({
-      channel: userId,
-      text: `✅ 출근 완료! (${result.time})`
-    });
+    if (tasks.length === 0) {
+      // 태스크가 없으면 바로 출근 처리
+      const result = await attendanceManager.checkIn(userId);
+      
+      await client.chat.postMessage({
+        channel: userId,
+        text: `✅ 출근 완료! (${result.time})\n\n할당된 태스크가 없어 태스크 선택을 건너뛰었습니다.`
+      });
+      
+      // 홈 뷰 업데이트
+      const todayStatus = await attendanceManager.getTodayStatus(userId);
+      const homeView = slackUI.getHomeView(userId, todayStatus);
+      await client.views.publish({
+        user_id: userId,
+        view: homeView
+      });
+    } else {
+      // 태스크 선택 모달 표시
+      await client.views.open({
+        trigger_id: body.trigger_id,
+        view: slackUI.getTaskSelectionModal(tasks, 'checkin')
+      });
+    }
     
   } catch (error) {
     logger.error(error);
@@ -78,28 +89,33 @@ app.action('check_out', async ({ body, ack, client, logger }) => {
   
   try {
     const userId = body.user.id;
-    const result = await attendanceManager.checkOut(userId);
     
-    // 홈 뷰 업데이트
-    const todayStatus = await attendanceManager.getTodayStatus(userId);
-    const homeView = slackUI.getHomeView(userId, todayStatus);
+    // Notion에서 사용자 태스크 조회
+    const tasks = await notionService.getUserTasks(userId);
     
-    await client.views.publish({
-      user_id: userId,
-      view: homeView
-    });
-    
-    // 작업 기록 요청
-    await client.views.open({
-      trigger_id: body.trigger_id,
-      view: slackUI.getTaskModal()
-    });
-    
-    // 성공 메시지
-    await client.chat.postMessage({
-      channel: userId,
-      text: `✅ 퇴근 완료! (${result.time})\n오늘 근무 시간: ${result.workHours}`
-    });
+    if (tasks.length === 0) {
+      // 태스크가 없으면 바로 퇴근 처리
+      const result = await attendanceManager.checkOut(userId);
+      
+      await client.chat.postMessage({
+        channel: userId,
+        text: `✅ 퇴근 완료! (${result.time})\n오늘 근무 시간: ${result.workHours}\n\n할당된 태스크가 없어 작업 기록을 건너뛰었습니다.`
+      });
+      
+      // 홈 뷰 업데이트
+      const todayStatus = await attendanceManager.getTodayStatus(userId);
+      const homeView = slackUI.getHomeView(userId, todayStatus);
+      await client.views.publish({
+        user_id: userId,
+        view: homeView
+      });
+    } else {
+      // 태스크 선택 모달 표시
+      await client.views.open({
+        trigger_id: body.trigger_id,
+        view: slackUI.getTaskSelectionModal(tasks, 'checkout')
+      });
+    }
     
   } catch (error) {
     logger.error(error);
@@ -139,12 +155,101 @@ app.action('view_monthly', async ({ body, ack, client, logger }) => {
   }
 });
 
+// 출근 태스크 선택 모달 제출
+app.view('task_selection_checkin', async ({ ack, body, view, client, logger }) => {
+  await ack();
+  
+  const userId = body.user.id;
+  const values = view.state.values;
+  const selectedTaskIds = values.selected_tasks?.task_select?.selected_options?.map(option => option.value) || [];
+  
+  try {
+    // 출근 처리
+    const result = await attendanceManager.checkIn(userId, selectedTaskIds);
+    
+    let message = `✅ 출근 완료! (${result.time})`;
+    if (selectedTaskIds.length > 0) {
+      message += `\n선택된 태스크: ${selectedTaskIds.length}개`;
+    }
+    
+    await client.chat.postMessage({
+      channel: userId,
+      text: message
+    });
+    
+    // 홈 뷰 업데이트
+    const todayStatus = await attendanceManager.getTodayStatus(userId);
+    const homeView = slackUI.getHomeView(userId, todayStatus);
+    await client.views.publish({
+      user_id: userId,
+      view: homeView
+    });
+    
+  } catch (error) {
+    logger.error(error);
+    await client.chat.postMessage({
+      channel: userId,
+      text: `❌ 출근 처리 중 오류가 발생했습니다: ${error.message}`
+    });
+  }
+});
+
+// 퇴근 태스크 선택 모달 제출
+app.view('task_selection_checkout', async ({ ack, body, view, client, logger }) => {
+  await ack();
+  
+  const userId = body.user.id;
+  const values = view.state.values;
+  const selectedTaskIds = values.selected_tasks?.task_select?.selected_options?.map(option => option.value) || [];
+  
+  try {
+    // 퇴근 처리
+    const result = await attendanceManager.checkOut(userId);
+    
+    // 홈 뷰 업데이트
+    const todayStatus = await attendanceManager.getTodayStatus(userId);
+    const homeView = slackUI.getHomeView(userId, todayStatus);
+    await client.views.publish({
+      user_id: userId,
+      view: homeView
+    });
+    
+    // 작업 기록 모달 표시 (선택된 태스크 ID 전달)
+    // 모달을 update로 변경 (trigger_id 없이)
+    await client.views.update({
+      view_id: body.view.id,
+      view: slackUI.getTaskModal(selectedTaskIds)
+    });
+    
+    // 성공 메시지
+    let message = `✅ 퇴근 완료! (${result.time})\n오늘 근무 시간: ${result.workHours}`;
+    if (selectedTaskIds.length > 0) {
+      message += `\n선택된 태스크: ${selectedTaskIds.length}개`;
+    }
+    
+    await client.chat.postMessage({
+      channel: userId,
+      text: message
+    });
+    
+  } catch (error) {
+    logger.error(error);
+    await client.chat.postMessage({
+      channel: userId,
+      text: `❌ 퇴근 처리 중 오류가 발생했습니다: ${error.message}`
+    });
+  }
+});
+
 // 작업 기록 모달 제출
 app.view('task_submission', async ({ ack, body, view, client }) => {
   await ack();
   
   const userId = body.user.id;
   const values = view.state.values;
+  
+  // 모달 private_metadata에서 선택된 태스크 ID 가져오기
+  const selectedTaskIds = view.private_metadata ? JSON.parse(view.private_metadata) : [];
   
   const tasks = [];
   for (let i = 1; i <= 3; i++) {
@@ -160,12 +265,12 @@ app.view('task_submission', async ({ ack, body, view, client }) => {
   }
   
   try {
-    // Notion에 작업 기록 저장
-    await notionService.saveTasks(userId, tasks);
+    // Notion에 작업 기록 저장 (선택된 태스크에만 코멘트 추가)
+    await notionService.saveTasks(userId, tasks, selectedTaskIds);
     
     await client.chat.postMessage({
       channel: userId,
-      text: '✅ 작업 내역이 Notion에 저장되었습니다!'
+      text: '✅ 작업 내역이 선택된 Notion 태스크에 코멘트로 저장되었습니다!'
     });
   } catch (error) {
     console.error('Error saving tasks:', error);

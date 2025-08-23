@@ -139,9 +139,73 @@ class SlackUI {
   }
 
   /**
+   * 태스크 선택 모달
+   */
+  getTaskSelectionModal(tasks, action) {
+    const options = tasks.map(task => ({
+      text: {
+        type: 'plain_text',
+        text: task.label.length > 75 ? task.label.substring(0, 72) + '...' : task.label
+      },
+      value: task.id
+    }));
+
+    return {
+      type: 'modal',
+      callback_id: `task_selection_${action}`,
+      title: {
+        type: 'plain_text',
+        text: action === 'checkin' ? '출근 태스크 선택' : '퇴근 태스크 선택'
+      },
+      submit: {
+        type: 'plain_text',
+        text: '확인'
+      },
+      close: {
+        type: 'plain_text',
+        text: '취소'
+      },
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: action === 'checkin' ? 
+              '*출근을 기록할 태스크를 선택해주세요*\n여러 개 선택 가능합니다.' :
+              '*퇴근을 기록할 태스크를 선택해주세요*\n여러 개 선택 가능합니다.'
+          }
+        },
+        {
+          type: 'input',
+          block_id: 'selected_tasks',
+          label: {
+            type: 'plain_text',
+            text: '태스크 선택'
+          },
+          element: {
+            type: 'multi_static_select',
+            action_id: 'task_select',
+            placeholder: {
+              type: 'plain_text',
+              text: '태스크를 선택하세요'
+            },
+            options: options.length > 0 ? options : [{
+              text: {
+                type: 'plain_text',
+                text: '할당된 태스크가 없습니다'
+              },
+              value: 'none'
+            }]
+          }
+        }
+      ]
+    };
+  }
+
+  /**
    * 작업 기록 모달
    */
-  getTaskModal() {
+  getTaskModal(selectedTaskIds = []) {
     return {
       type: 'modal',
       callback_id: 'task_submission',
@@ -157,6 +221,7 @@ class SlackUI {
         type: 'plain_text',
         text: '취소'
       },
+      private_metadata: JSON.stringify(selectedTaskIds),
       blocks: [
         {
           type: 'section',

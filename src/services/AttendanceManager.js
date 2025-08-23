@@ -9,7 +9,7 @@ class AttendanceManager {
   /**
    * 출근 처리
    */
-  async checkIn(userId) {
+  async checkIn(userId, selectedTaskIds = []) {
     const now = moment();
     const date = now.format('YYYY-MM-DD');
     const time = now.format('HH:mm:ss');
@@ -23,6 +23,8 @@ class AttendanceManager {
     // 출근 기록 저장
     await this.db.saveCheckIn(userId, date, time);
     
+    // 선택된 태스크 ID는 저장하지 않음 (퇴근 시 다시 선택)
+    
     // Notion에도 동기화
     if (this.notion) {
       await this.notion.syncCheckIn(userId, date, time);
@@ -31,7 +33,8 @@ class AttendanceManager {
     return {
       date,
       time,
-      message: '출근이 정상적으로 처리되었습니다.'
+      message: '출근이 정상적으로 처리되었습니다.',
+      selectedTasks: selectedTaskIds.length
     };
   }
 

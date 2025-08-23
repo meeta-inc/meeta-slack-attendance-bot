@@ -44,10 +44,68 @@ class NotionService {
   }
 
   /**
-   * 오늘 작업한 태스크들에 퇴근 코멘트 추가
+   * 사용자에게 할당된 미완료 태스크 목록 조회
    */
-  async saveTasks(userId, tasks) {
-    if (!this.notion || !this.taskDbId) return;
+  async getUserTasks(userId) {
+    if (!this.notion || !this.taskDbId) return [];
+    
+    try {
+      const response = await this.notion.databases.query({
+        database_id: this.taskDbId,
+        filter: {
+          and: [
+            {
+              property: 'Status',
+              select: {
+                does_not_equal: 'Done'
+              }
+            },
+            {
+              property: 'Assignee',
+              people: {
+                contains: userId
+              }
+            }
+          ]
+        },
+        sorts: [
+          {
+            property: 'Date',
+            direction: 'descending'
+          }
+        ]
+      });
+      
+      // 태스크 정보 추출
+      const tasks = response.results.map(page => {
+        const name = page.properties.Name?.title?.[0]?.text?.content || '제목 없음';
+        const date = page.properties.Date?.date?.start || '';
+        const status = page.properties.Status?.select?.name || '';
+        
+        return {
+          id: page.id,
+          name: name,
+          date: date,
+          status: status,
+          label: `${name} ${date ? `(${date})` : ''} - ${status}`
+        };
+      });
+      
+      return tasks;
+    } catch (error) {
+      console.error('Failed to fetch user tasks:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 선택된 태스크들에 퇴근 코멘트 추가
+   */
+  async saveTasks(userId, tasks, selectedTaskIds) {
+    if (!this.notion || !this.taskDbId || !selectedTaskIds || selectedTaskIds.length === 0) {
+      console.log('선택된 태스크가 없습니다.');
+      return;
+    }
     
     const today = moment().format('YYYY-MM-DD');
     const now = moment();
@@ -55,21 +113,6 @@ class NotionService {
     const yearMonth = now.format('YYYY-MM');
     
     try {
-      // 오늘 날짜의 작업들 조회
-      const response = await this.notion.databases.query({
-        database_id: this.taskDbId,
-        filter: {
-          property: 'Date',
-          date: {
-            equals: today
-          }
-        }
-      });
-      
-      if (response.results.length === 0) {
-        console.log('오늘 날짜의 작업이 없습니다.');
-        return;
-      }
       
       // 작업 시간 정보 생성
       let totalHours = 0;
@@ -97,11 +140,11 @@ class NotionService {
         `• 일 평균: ${(monthlyTotalHours / workingDay).toFixed(1)}시간\n` +
         `\n✅ 퇴근 완료`;
       
-      // 오늘 날짜의 모든 작업에 코멘트 추가
-      for (const page of response.results) {
+      // 선택된 태스크들에만 코멘트 추가
+      for (const taskId of selectedTaskIds) {
         try {
           await this.notion.comments.create({
-            parent: { page_id: page.id },
+            parent: { page_id: taskId },
             rich_text: [
               {
                 type: 'text',
@@ -112,9 +155,9 @@ class NotionService {
             ]
           });
           
-          console.log(`작업 코멘트 추가 완료: ${page.id}`);
+          console.log(`작업 코멘트 추가 완료: ${taskId}`);
         } catch (err) {
-          console.error(`코멘트 추가 실패 (${page.id}):`, err);
+          console.error(`코멘트 추가 실패 (${taskId}):`, err);
         }
       }
     } catch (error) {
