@@ -4,7 +4,6 @@ const AttendanceManager = require('./services/AttendanceManager');
 const NotionService = require('./services/NotionService');
 const SlackUI = require('./ui/SlackUI');
 const Database = require('./database/Database');
-const cron = require('node-cron');
 const moment = require('moment-timezone');
 
 // 한국 시간대 설정
@@ -237,85 +236,6 @@ app.command('/attendance', async ({ command, ack, respond }) => {
   }
 });
 
-// 매일 오전 9시 리마인더
-cron.schedule('0 9 * * 1-5', async () => {
-  const users = await db.getAllUsers();
-  
-  for (const user of users) {
-    const todayStatus = await attendanceManager.getTodayStatus(user.userId);
-    
-    if (!todayStatus.checkIn) {
-      await app.client.chat.postMessage({
-        token: process.env.SLACK_BOT_TOKEN,
-        channel: user.userId,
-        text: '👋 좋은 아침입니다! 출근 버튼을 눌러 오늘의 근무를 시작해주세요.',
-        blocks: [
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: '👋 *좋은 아침입니다!*\n출근 버튼을 눌러 오늘의 근무를 시작해주세요.'
-            }
-          },
-          {
-            type: 'actions',
-            elements: [
-              {
-                type: 'button',
-                text: {
-                  type: 'plain_text',
-                  text: '출근하기'
-                },
-                style: 'primary',
-                action_id: 'check_in'
-              }
-            ]
-          }
-        ]
-      });
-    }
-  }
-});
-
-// 매일 오후 6시 퇴근 리마인더
-cron.schedule('0 18 * * 1-5', async () => {
-  const users = await db.getAllUsers();
-  
-  for (const user of users) {
-    const todayStatus = await attendanceManager.getTodayStatus(user.userId);
-    
-    if (todayStatus.checkIn && !todayStatus.checkOut) {
-      await app.client.chat.postMessage({
-        token: process.env.SLACK_BOT_TOKEN,
-        channel: user.userId,
-        text: '🌆 퇴근 시간입니다! 오늘 하루도 수고하셨습니다.',
-        blocks: [
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: '🌆 *퇴근 시간입니다!*\n오늘 하루도 수고하셨습니다.'
-            }
-          },
-          {
-            type: 'actions',
-            elements: [
-              {
-                type: 'button',
-                text: {
-                  type: 'plain_text',
-                  text: '퇴근하기'
-                },
-                style: 'danger',
-                action_id: 'check_out'
-              }
-            ]
-          }
-        ]
-      });
-    }
-  }
-});
 
 // 앱 시작
 (async () => {
