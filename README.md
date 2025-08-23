@@ -15,8 +15,8 @@ Slack에서 간편하게 출퇴근을 기록하고 Notion과 연동하여 작업
 - **실시간 상태 확인**: 오늘의 출퇴근 상태 즉시 확인
 
 ### 🔗 Notion 연동
-- **자동 동기화**: 출퇴근 기록이 Notion 데이터베이스에 자동 저장
 - **작업 코멘트**: 퇴근 시 오늘의 작업 내역을 Notion 태스크에 코멘트로 추가
+- **페이지 수정 없음**: Notion 페이지를 절대 수정하지 않고 코멘트만 추가
 - **시간 통계**: 일일 작업시간, 월 누적시간, 평균 근무시간 자동 계산
 - **카테고리 자동 분류**: 작업명을 기반으로 자동 카테고리 분류 (개발, 회의, 문서작업 등)
 
@@ -59,15 +59,9 @@ cp .env.example .env
 
 ### 4. Notion 설정
 
-#### 출퇴근 데이터베이스 생성
-다음 속성을 가진 데이터베이스 생성:
-- **사용자** (Title): 사용자 ID
-- **날짜** (Date): 출퇴근 날짜
-- **출근시간** (Text): 출근 시간
-- **퇴근시간** (Text): 퇴근 시간
-- **근무시간** (Text): 총 근무 시간
-- **상태** (Select): 근무중, 퇴근완료
-- **입력방식** (Select): 자동, 수동입력
+#### 출퇴근 데이터베이스 설정 (선택사항)
+- **참고**: 출퇴근 기록은 로컬 SQLite에만 저장되며 Notion 페이지는 수정하지 않습니다
+- 환경변수 `NOTION_DATABASE_ID`는 선택사항입니다
 
 #### 작업 데이터베이스 설정
 Notion의 "sub tasks" 데이터베이스를 사용합니다:
@@ -93,7 +87,7 @@ SLACK_APP_TOKEN=xapp-your-app-token
 
 # Notion Configuration
 NOTION_API_KEY=secret_your-notion-api-key
-NOTION_DATABASE_ID=your-attendance-database-id
+# NOTION_DATABASE_ID는 사용하지 않음 (페이지 수정 안함)
 NOTION_TASK_DATABASE_ID=24e45c9756f8800c9d64ce70dea3c762
 
 # App Configuration

@@ -17,146 +17,30 @@ class NotionService {
   }
 
   /**
-   * 출근 기록을 Notion에 동기화
+   * 출근 기록을 Notion에 코멘트로 추가
    */
   async syncCheckIn(userId, date, time) {
-    if (!this.notion || !this.attendanceDbId) return;
-    
-    try {
-      // 기존 레코드 확인
-      const existing = await this.findAttendanceRecord(userId, date);
-      
-      if (existing) {
-        // 업데이트
-        await this.notion.pages.update({
-          page_id: existing.id,
-          properties: {
-            '출근시간': {
-              rich_text: [{
-                text: { content: time }
-              }]
-            },
-            '상태': {
-              select: { name: '근무중' }
-            }
-          }
-        });
-      } else {
-        // 새로 생성
-        await this.notion.pages.create({
-          parent: { database_id: this.attendanceDbId },
-          properties: {
-            '날짜': {
-              date: { start: date }
-            },
-            '사용자': {
-              title: [{
-                text: { content: userId }
-              }]
-            },
-            '출근시간': {
-              rich_text: [{
-                text: { content: time }
-              }]
-            },
-            '상태': {
-              select: { name: '근무중' }
-            }
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Notion sync error:', error);
-    }
+    // 페이지 수정 대신 코멘트만 추가
+    console.log(`출근 기록: ${userId} - ${date} ${time}`);
+    // Notion 페이지 수정 기능 비활성화
   }
 
   /**
-   * 퇴근 기록을 Notion에 동기화
+   * 퇴근 기록을 Notion에 코멘트로 추가
    */
   async syncCheckOut(userId, date, time, workHours) {
-    if (!this.notion || !this.attendanceDbId) return;
-    
-    try {
-      const existing = await this.findAttendanceRecord(userId, date);
-      
-      if (existing) {
-        await this.notion.pages.update({
-          page_id: existing.id,
-          properties: {
-            '퇴근시간': {
-              rich_text: [{
-                text: { content: time }
-              }]
-            },
-            '근무시간': {
-              rich_text: [{
-                text: { content: workHours }
-              }]
-            },
-            '상태': {
-              select: { name: '퇴근완료' }
-            }
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Notion sync error:', error);
-    }
+    // 페이지 수정 대신 코멘트만 추가
+    console.log(`퇴근 기록: ${userId} - ${date} ${time} (근무시간: ${workHours})`);
+    // Notion 페이지 수정 기능 비활성화
   }
 
   /**
-   * 수동 입력 데이터를 Notion에 동기화
+   * 수동 입력 데이터를 Notion에 코멘트로 추가
    */
   async syncManualEntry(userId, date, checkIn, checkOut, workHours) {
-    if (!this.notion || !this.attendanceDbId) return;
-    
-    try {
-      const properties = {
-        '날짜': {
-          date: { start: date }
-        },
-        '사용자': {
-          title: [{
-            text: { content: userId }
-          }]
-        },
-        '출근시간': {
-          rich_text: [{
-            text: { content: checkIn }
-          }]
-        },
-        '입력방식': {
-          select: { name: '수동입력' }
-        }
-      };
-      
-      if (checkOut) {
-        properties['퇴근시간'] = {
-          rich_text: [{
-            text: { content: checkOut }
-          }]
-        };
-        properties['근무시간'] = {
-          rich_text: [{
-            text: { content: workHours }
-          }]
-        };
-        properties['상태'] = {
-          select: { name: '퇴근완료' }
-        };
-      } else {
-        properties['상태'] = {
-          select: { name: '근무중' }
-        };
-      }
-      
-      await this.notion.pages.create({
-        parent: { database_id: this.attendanceDbId },
-        properties
-      });
-    } catch (error) {
-      console.error('Notion sync error:', error);
-    }
+    // 페이지 수정 대신 코멘트만 추가
+    console.log(`수동 입력: ${userId} - ${date} 출근: ${checkIn} 퇴근: ${checkOut || '미입력'} (근무시간: ${workHours || '계산중'})`);
+    // Notion 페이지 수정 기능 비활성화
   }
 
   /**
@@ -261,37 +145,11 @@ class NotionService {
   }
 
   /**
-   * 특정 날짜의 출퇴근 기록 찾기
+   * 특정 날짜의 출퇴근 기록 찾기 (비활성화)
    */
   async findAttendanceRecord(userId, date) {
-    if (!this.notion || !this.attendanceDbId) return null;
-    
-    try {
-      const response = await this.notion.databases.query({
-        database_id: this.attendanceDbId,
-        filter: {
-          and: [
-            {
-              property: '사용자',
-              title: {
-                contains: userId
-              }
-            },
-            {
-              property: '날짜',
-              date: {
-                equals: date
-              }
-            }
-          ]
-        }
-      });
-      
-      return response.results[0] || null;
-    } catch (error) {
-      console.error('Notion query error:', error);
-      return null;
-    }
+    // Notion 페이지 조회 비활성화 - 페이지 수정하지 않음
+    return null;
   }
 
   /**
