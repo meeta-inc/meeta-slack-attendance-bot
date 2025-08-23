@@ -172,24 +172,28 @@ class NotionService {
         await this.notion.pages.create({
           parent: { database_id: this.taskDbId },
           properties: {
-            '작업명': {
+            'Name': {
               title: [{
-                text: { content: task.name }
+                text: { content: `${task.name} (${userId})` }
               }]
             },
-            '날짜': {
+            'Date': {
               date: { start: today }
             },
-            '사용자': {
-              rich_text: [{
-                text: { content: userId }
-              }]
-            },
-            '소요시간': {
+            'Hours': {
               number: task.hours
             },
-            '카테고리': {
-              select: { name: this.categorizeTask(task.name) }
+            'Status': {
+              select: { name: 'Done' }
+            },
+            'Priority': {
+              select: { name: 'Medium' }
+            },
+            'Tags': {
+              multi_select: [
+                { name: this.categorizeTask(task.name) },
+                { name: 'Slack' }
+              ]
             }
           }
         });

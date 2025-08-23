@@ -69,13 +69,16 @@ cp .env.example .env
 - **상태** (Select): 근무중, 퇴근완료
 - **입력방식** (Select): 자동, 수동입력
 
-#### 작업 데이터베이스 생성
-다음 속성을 가진 데이터베이스 생성:
-- **작업명** (Title): 작업 이름
-- **날짜** (Date): 작업 수행 날짜
-- **사용자** (Text): 사용자 ID
-- **소요시간** (Number): 작업 소요 시간
-- **카테고리** (Select): 개발, 회의, 문서작업, 코드리뷰, 테스트, 기획, 기타
+#### 작업 데이터베이스 설정
+Notion의 "sub tasks" 데이터베이스를 사용합니다:
+- **데이터베이스 ID**: `24e45c9756f8800c9d64ce70dea3c762`
+- 필수 속성:
+  - **Name** (Title): 작업명
+  - **Date** (Date): 작업 날짜
+  - **Hours** (Number): 소요 시간
+  - **Status** (Select): 상태 (자동으로 'Done' 설정)
+  - **Priority** (Select): 우선순위 (자동으로 'Medium' 설정)
+  - **Tags** (Multi-select): 카테고리 태그
 
 ### 5. 환경 변수 설정
 
@@ -90,7 +93,7 @@ SLACK_APP_TOKEN=xapp-your-app-token
 # Notion Configuration
 NOTION_API_KEY=secret_your-notion-api-key
 NOTION_DATABASE_ID=your-attendance-database-id
-NOTION_TASK_DATABASE_ID=your-task-database-id
+NOTION_TASK_DATABASE_ID=24e45c9756f8800c9d64ce70dea3c762
 
 # App Configuration
 PORT=3000
