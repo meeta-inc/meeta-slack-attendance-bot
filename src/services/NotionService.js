@@ -160,47 +160,80 @@ class NotionService {
   }
 
   /**
-   * 작업 내역을 Notion에 저장
+   * 오늘 작업한 태스크들에 퇴근 코멘트 추가
    */
   async saveTasks(userId, tasks) {
     if (!this.notion || !this.taskDbId) return;
     
     const today = moment().format('YYYY-MM-DD');
+    const now = moment();
+    const timeStr = now.format('HH:mm');
+    const yearMonth = now.format('YYYY-MM');
     
     try {
-      for (const task of tasks) {
-        await this.notion.pages.create({
-          parent: { database_id: this.taskDbId },
-          properties: {
-            'Name': {
-              title: [{
-                text: { content: `${task.name} (${userId})` }
-              }]
-            },
-            'Date': {
-              date: { start: today }
-            },
-            'Hours': {
-              number: task.hours
-            },
-            'Status': {
-              select: { name: 'Done' }
-            },
-            'Priority': {
-              select: { name: 'Medium' }
-            },
-            'Tags': {
-              multi_select: [
-                { name: this.categorizeTask(task.name) },
-                { name: 'Slack' }
-              ]
-            }
+      // 오늘 날짜의 작업들 조회
+      const response = await this.notion.databases.query({
+        database_id: this.taskDbId,
+        filter: {
+          property: 'Date',
+          date: {
+            equals: today
           }
+        }
+      });
+      
+      if (response.results.length === 0) {
+        console.log('오늘 날짜의 작업이 없습니다.');
+        return;
+      }
+      
+      // 작업 시간 정보 생성
+      let totalHours = 0;
+      let taskDetails = [];
+      
+      for (const task of tasks) {
+        totalHours += task.hours;
+        taskDetails.push(`• ${task.name}: ${task.hours}시간`);
+      }
+      
+      // 이번 달 누적 시간 계산
+      const monthlyStats = await this.getMonthlyTaskStats(userId, yearMonth);
+      const monthlyTotalHours = monthlyStats ? monthlyStats.totalHours + totalHours : totalHours;
+      const workingDay = moment().diff(moment().startOf('month'), 'days') + 1;
+      
+      // 코멘트 내용 생성
+      const commentContent = `📝 **퇴근 기록 (${timeStr})**\n` +
+        `👤 작성자: ${userId}\n` +
+        `📅 날짜: ${today}\n` +
+        `\n⏱️ **오늘 작업 내역:**\n${taskDetails.join('\n')}\n` +
+        `\n📊 **시간 통계:**\n` +
+        `• 일일 작업시간: ${totalHours}시간\n` +
+        `• 월 누적시간: ${monthlyTotalHours}시간\n` +
+        `• 근무일수: ${workingDay}일차\n` +
+        `• 일 평균: ${(monthlyTotalHours / workingDay).toFixed(1)}시간\n` +
+        `\n✅ 퇴근 완료`;
+      
+      // 첫 번째 작업에만 코멘트 추가 (중복 방지)
+      if (response.results.length > 0) {
+        const pageId = response.results[0].id;
+        
+        await this.notion.comments.create({
+          parent: { page_id: pageId },
+          rich_text: [
+            {
+              type: 'text',
+              text: {
+                content: commentContent
+              }
+            }
+          ]
         });
+        
+        console.log(`작업 코멘트 추가 완료: ${pageId}`);
       }
     } catch (error) {
-      console.error('Notion task save error:', error);
-      throw error;
+      console.error('Notion comment save error:', error);
+      // 코멘트 추가 실패해도 작업 계속 진행
     }
   }
 
