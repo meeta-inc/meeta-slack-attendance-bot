@@ -1,0 +1,24 @@
+{
+  "name": "slack-attendance-bot",
+  "version": "1.0.0",
+  "description": "Slack bot for attendance management with Notion integration",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@slack/bolt": "^3.15.0",
+    "@notionhq/client": "^2.2.14",
+    "dotenv": "^16.3.1",
+    "moment-timezone": "^0.5.43",
+    "sqlite3": "^5.1.6",
+    "node-cron": "^3.0.3",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "jest": "^29.7.0"
+  }
+}
