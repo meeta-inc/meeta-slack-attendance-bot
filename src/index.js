@@ -24,16 +24,31 @@ const notionService = new NotionService();
 const attendanceManager = new AttendanceManager(db, notionService);
 const slackUI = new SlackUI();
 
-// 홈 탭 열기 이벤트
-app.event('app_home_opened', async ({ event, client, logger }) => {
+// 채널에 봇이 추가될 때 환영 메시지
+app.event('member_joined_channel', async ({ event, client, logger }) => {
+  try {
+    if (event.user === process.env.SLACK_BOT_USER_ID) {
+      await client.chat.postMessage({
+        channel: event.channel,
+        text: '안녕하세요! 출퇴근 관리 봇입니다. 👋\n이 채널에서 출퇴근을 기록할 수 있습니다.',
+        blocks: slackUI.getWelcomeMessage()
+      });
+    }
+  } catch (error) {
+    logger.error(error);
+  }
+});
+
+// 채널에 /attendance 명령어 또는 멘션 시 대화형 메시지 표시
+app.event('app_mention', async ({ event, client, logger }) => {
   try {
     const userId = event.user;
+    const channelId = event.channel;
     const todayStatus = await attendanceManager.getTodayStatus(userId);
-    const homeView = slackUI.getHomeView(userId, todayStatus);
     
-    await client.views.publish({
-      user_id: userId,
-      view: homeView
+    await client.chat.postMessage({
+      channel: channelId,
+      blocks: slackUI.getChannelMessage(userId, todayStatus)
     });
   } catch (error) {
     logger.error(error);
@@ -45,7 +60,8 @@ app.action('check_in', async ({ body, ack, client, logger }) => {
   await ack();
   
   try {
-    const userId = body.user.id;
+    // 채널에서는 버튼의 value에서 userId를 가져오고, DM에서는 body.user.id 사용
+    const userId = body.actions?.[0]?.value || body.user.id;
     
     // Notion에서 사용자 태스크 조회
     const tasks = await notionService.getUserTasks(userId);
@@ -54,23 +70,26 @@ app.action('check_in', async ({ body, ack, client, logger }) => {
       // 태스크가 없으면 바로 출근 처리
       const result = await attendanceManager.checkIn(userId);
       
+      // 채널 또는 DM으로 메시지 전송
+      const channel = body.channel?.id || userId;
       await client.chat.postMessage({
-        channel: userId,
-        text: `✅ 출근 완료! (${result.time})\n\n할당된 태스크가 없어 태스크 선택을 건너뛰었습니다.`
+        channel: channel,
+        text: `✅ <@${userId}>님 출근 완료! (${result.time})\n\n할당된 태스크가 없어 태스크 선택을 건너뛰었습니다.`
       });
       
-      // 홈 뷰 업데이트
-      const todayStatus = await attendanceManager.getTodayStatus(userId);
-      const homeView = slackUI.getHomeView(userId, todayStatus);
-      await client.views.publish({
-        user_id: userId,
-        view: homeView
-      });
+      // 채널 메시지 업데이트 (채널인 경우)
+      if (body.channel?.id) {
+        const todayStatus = await attendanceManager.getTodayStatus(userId);
+        await client.chat.postMessage({
+          channel: body.channel.id,
+          blocks: slackUI.getChannelMessage(userId, todayStatus)
+        });
+      }
     } else {
-      // 태스크 선택 모달 표시
+      // 태스크 선택 모달 표시 (채널 ID 전달)
       await client.views.open({
         trigger_id: body.trigger_id,
-        view: slackUI.getTaskSelectionModal(tasks, 'checkin')
+        view: slackUI.getTaskSelectionModal(tasks, 'checkin', body.channel?.id)
       });
     }
     
@@ -88,7 +107,8 @@ app.action('check_out', async ({ body, ack, client, logger }) => {
   await ack();
   
   try {
-    const userId = body.user.id;
+    // 채널에서는 버튼의 value에서 userId를 가져오고, DM에서는 body.user.id 사용
+    const userId = body.actions?.[0]?.value || body.user.id;
     
     // Notion에서 사용자 태스크 조회
     const tasks = await notionService.getUserTasks(userId);
@@ -97,23 +117,26 @@ app.action('check_out', async ({ body, ack, client, logger }) => {
       // 태스크가 없으면 바로 퇴근 처리
       const result = await attendanceManager.checkOut(userId);
       
+      // 채널 또는 DM으로 메시지 전송
+      const channel = body.channel?.id || userId;
       await client.chat.postMessage({
-        channel: userId,
-        text: `✅ 퇴근 완료! (${result.time})\n오늘 근무 시간: ${result.workHours}\n\n할당된 태스크가 없어 작업 기록을 건너뛰었습니다.`
+        channel: channel,
+        text: `✅ <@${userId}>님 퇴근 완료! (${result.time})\n오늘 근무 시간: ${result.workHours}\n\n할당된 태스크가 없어 작업 기록을 건너뛰었습니다.`
       });
       
-      // 홈 뷰 업데이트
-      const todayStatus = await attendanceManager.getTodayStatus(userId);
-      const homeView = slackUI.getHomeView(userId, todayStatus);
-      await client.views.publish({
-        user_id: userId,
-        view: homeView
-      });
+      // 채널 메시지 업데이트 (채널인 경우)
+      if (body.channel?.id) {
+        const todayStatus = await attendanceManager.getTodayStatus(userId);
+        await client.chat.postMessage({
+          channel: body.channel.id,
+          blocks: slackUI.getChannelMessage(userId, todayStatus)
+        });
+      }
     } else {
-      // 태스크 선택 모달 표시
+      // 태스크 선택 모달 표시 (채널 ID 전달)
       await client.views.open({
         trigger_id: body.trigger_id,
-        view: slackUI.getTaskSelectionModal(tasks, 'checkout')
+        view: slackUI.getTaskSelectionModal(tasks, 'checkout', body.channel?.id)
       });
     }
     
@@ -167,23 +190,27 @@ app.view('task_selection_checkin', async ({ ack, body, view, client, logger }) =
     // 출근 처리
     const result = await attendanceManager.checkIn(userId, selectedTaskIds);
     
-    let message = `✅ 출근 완료! (${result.time})`;
+    let message = `✅ <@${userId}>님 출근 완료! (${result.time})`;
     if (selectedTaskIds.length > 0) {
       message += `\n선택된 태스크: ${selectedTaskIds.length}개`;
     }
     
+    // 현재 채널 정보를 private_metadata에서 가져오기 (채널 사용 시 저장 필요)
+    const channelId = view.private_metadata || userId;
+    
     await client.chat.postMessage({
-      channel: userId,
+      channel: channelId,
       text: message
     });
     
-    // 홈 뷰 업데이트
-    const todayStatus = await attendanceManager.getTodayStatus(userId);
-    const homeView = slackUI.getHomeView(userId, todayStatus);
-    await client.views.publish({
-      user_id: userId,
-      view: homeView
-    });
+    // 채널인 경우 상태 메시지 업데이트
+    if (channelId !== userId) {
+      const todayStatus = await attendanceManager.getTodayStatus(userId);
+      await client.chat.postMessage({
+        channel: channelId,
+        blocks: slackUI.getChannelMessage(userId, todayStatus)
+      });
+    }
     
   } catch (error) {
     logger.error(error);

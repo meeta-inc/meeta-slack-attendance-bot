@@ -2,6 +2,172 @@ const moment = require('moment-timezone');
 
 class SlackUI {
   /**
+   * 채널 환영 메시지
+   */
+  getWelcomeMessage() {
+    return [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '*📋 출퇴근 관리 봇 사용법*\n\n• 봇을 멘션하면 출퇴근 버튼이 표시됩니다\n• `/attendance` 명령어로도 사용 가능합니다\n• 각자의 출퇴근 기록은 개별적으로 관리됩니다'
+        }
+      },
+      {
+        type: 'divider'
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '*사용 가능한 명령어:*\n• `/attendance status` - 오늘의 출퇴근 상태\n• `/attendance month` - 이번 달 근무 현황\n• `@봇이름` - 출퇴근 버튼 표시'
+        }
+      }
+    ];
+  }
+
+  /**
+   * 채널용 대화형 메시지
+   */
+  getChannelMessage(userId, todayStatus) {
+    const blocks = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `<@${userId}>님의 출퇴근 상태`
+        }
+      },
+      {
+        type: 'divider'
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*📅 날짜:*\n${todayStatus.date}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*⏰ 현재 시간:*\n${moment().format('HH:mm:ss')}`
+          }
+        ]
+      }
+    ];
+
+    // 출근 상태 표시
+    if (todayStatus.checkIn) {
+      blocks.push({
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*✅ 출근:*\n${todayStatus.checkIn}`
+          },
+          {
+            type: 'mrkdwn',
+            text: todayStatus.checkOut ? `*✅ 퇴근:*\n${todayStatus.checkOut}` : `*🏢 상태:*\n근무 중`
+          }
+        ]
+      });
+      
+      if (todayStatus.workHours) {
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*⏱️ 근무 시간:* ${todayStatus.workHours}`
+          }
+        });
+      }
+    } else if (!todayStatus.isWeekend) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '⏰ *출근 전입니다*'
+        }
+      });
+    }
+
+    // 주말 메시지
+    if (todayStatus.isWeekend) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '🌟 *주말입니다! 편안한 휴식 되세요.*'
+        }
+      });
+    }
+
+    blocks.push({ type: 'divider' });
+
+    // 액션 버튼들
+    const actionElements = [];
+
+    if (!todayStatus.checkIn && !todayStatus.isWeekend) {
+      actionElements.push({
+        type: 'button',
+        text: {
+          type: 'plain_text',
+          text: '출근하기',
+          emoji: true
+        },
+        style: 'primary',
+        action_id: 'check_in',
+        value: userId
+      });
+    }
+
+    if (todayStatus.checkIn && !todayStatus.checkOut && !todayStatus.isWeekend) {
+      actionElements.push({
+        type: 'button',
+        text: {
+          type: 'plain_text',
+          text: '퇴근하기',
+          emoji: true
+        },
+        style: 'danger',
+        action_id: 'check_out',
+        value: userId
+      });
+    }
+
+    actionElements.push({
+      type: 'button',
+      text: {
+        type: 'plain_text',
+        text: '수동 입력',
+        emoji: true
+      },
+      action_id: 'manual_entry',
+      value: userId
+    });
+
+    actionElements.push({
+      type: 'button',
+      text: {
+        type: 'plain_text',
+        text: '월별 현황',
+        emoji: true
+      },
+      action_id: 'view_monthly',
+      value: userId
+    });
+
+    if (actionElements.length > 0) {
+      blocks.push({
+        type: 'actions',
+        elements: actionElements
+      });
+    }
+
+    return blocks;
+  }
+
+  /**
    * 홈 탭 뷰 생성
    */
   getHomeView(userId, todayStatus) {
@@ -141,7 +307,7 @@ class SlackUI {
   /**
    * 태스크 선택 모달
    */
-  getTaskSelectionModal(tasks, action) {
+  getTaskSelectionModal(tasks, action, channelId = null) {
     const options = tasks.map(task => ({
       text: {
         type: 'plain_text',
@@ -157,6 +323,7 @@ class SlackUI {
         type: 'plain_text',
         text: action === 'checkin' ? '출근 태스크 선택' : '퇴근 태스크 선택'
       },
+      private_metadata: channelId || '',
       submit: {
         type: 'plain_text',
         text: '확인'
