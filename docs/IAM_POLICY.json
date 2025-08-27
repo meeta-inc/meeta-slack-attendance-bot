@@ -1,0 +1,59 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ECRRepositoryAccess",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage",
+        "ecr:PutImage",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload"
+      ],
+      "Resource": [
+        "arn:aws:ecr:ap-northeast-1:*:repository/ai-navi-slack-bot-ecr-dev",
+        "arn:aws:ecr:ap-northeast-1:*:repository/ai-navi-slack-bot-ecr-dev2",
+        "arn:aws:ecr:ap-northeast-1:*:repository/ai-navi-slack-bot-ecr-uat1",
+        "arn:aws:ecr:ap-northeast-1:*:repository/ai-navi-slack-bot-ecr-uat2",
+        "arn:aws:ecr:ap-northeast-1:*:repository/ai-navi-slack-bot-ecr-uat3",
+        "arn:aws:ecr:ap-northeast-1:*:repository/ai-navi-slack-bot-ecr-prd"
+      ]
+    },
+    {
+      "Sid": "ECRAuthToken",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:GetAuthorizationToken"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AppRunnerServiceManagement",
+      "Effect": "Allow",
+      "Action": [
+        "apprunner:ListServices",
+        "apprunner:DescribeService",
+        "apprunner:StartDeployment"
+      ],
+      "Resource": [
+        "arn:aws:apprunner:ap-northeast-1:*:service/ai-navi-slack-bot-dev/*",
+        "arn:aws:apprunner:ap-northeast-1:*:service/ai-navi-slack-bot-dev2/*",
+        "arn:aws:apprunner:ap-northeast-1:*:service/ai-navi-slack-bot-uat1/*",
+        "arn:aws:apprunner:ap-northeast-1:*:service/ai-navi-slack-bot-uat2/*",
+        "arn:aws:apprunner:ap-northeast-1:*:service/ai-navi-slack-bot-uat3/*",
+        "arn:aws:apprunner:ap-northeast-1:*:service/ai-navi-slack-bot-prd/*"
+      ]
+    },
+    {
+      "Sid": "AppRunnerServiceList",
+      "Effect": "Allow",
+      "Action": [
+        "apprunner:ListServices"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
