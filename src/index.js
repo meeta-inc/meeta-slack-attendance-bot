@@ -369,9 +369,30 @@ app.command('/attendance', async ({ command, ack, respond }) => {
 });
 
 
+// Express 서버 추가 (Health Check용)
+const express = require('express');
+const expressApp = express();
+const PORT = process.env.PORT || 3000;
+
+// Health check endpoint
+expressApp.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy',
+    service: 'slack-attendance-bot',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // 앱 시작
 (async () => {
   await db.initialize();
+  
+  // Slack 앱 시작 (Socket Mode)
   await app.start();
-  console.log('⚡️ Slack 출퇴근 관리 봇이 실행중입니다!');
+  
+  // Express 서버 시작 (Health Check용)
+  expressApp.listen(PORT, () => {
+    console.log(`🏥 Health check server is running on port ${PORT}`);
+    console.log('⚡️ Slack 출퇴근 관리 봇이 실행중입니다!');
+  });
 })();
