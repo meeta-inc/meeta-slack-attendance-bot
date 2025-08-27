@@ -239,3 +239,4 @@ class AttendanceManager {
     };
   }
 }
+module.exports = AttendanceManager;

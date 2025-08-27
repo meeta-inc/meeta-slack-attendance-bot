@@ -1,0 +1,15 @@
+node_modules
+.git
+.gitignore
+*.log
+.DS_Store
+.env
+.env.local
+data/
+*.db
+*.sqlite
+docs/
+README.md
+.github/
+coverage/
+.nyc_output/
