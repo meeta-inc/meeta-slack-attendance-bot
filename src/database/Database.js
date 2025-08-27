@@ -139,18 +139,24 @@ class Database {
   }
 
   /**
-   * 월별 출퇴근 기록 조회
+   * 월별 출퇴근 기록 조회 (세션 기반)
    */
   async getMonthlyAttendance(userId, startDate, endDate) {
     return new Promise((resolve, reject) => {
       this.db.all(
-        `SELECT * FROM attendance 
-         WHERE userId = ? AND date BETWEEN ? AND ?
+        `SELECT 
+           date,
+           MIN(checkIn) as checkIn,
+           MAX(checkOut) as checkOut,
+           SUM(workMinutes) as totalMinutes
+         FROM attendance_sessions 
+         WHERE userId = ? AND date BETWEEN ? AND ? AND status = 'checked_out'
+         GROUP BY date
          ORDER BY date ASC`,
         [userId, startDate, endDate],
         (err, rows) => {
           if (err) reject(err);
-          else resolve(rows);
+          else resolve(rows || []);
         }
       );
     });

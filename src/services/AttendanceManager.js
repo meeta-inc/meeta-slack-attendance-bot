@@ -185,26 +185,21 @@ class AttendanceManager {
       current.add(1, 'day');
     }
     
-    // 기록 분석
+    // 기록 분석 (세션 기반)
     records.forEach(record => {
       totalWorkDays++;
       
-      // 근무 시간 계산
-      if (record.checkIn && record.checkOut) {
-        const checkIn = moment(`${record.date} ${record.checkIn}`);
-        const checkOut = moment(`${record.date} ${record.checkOut}`);
-        const duration = moment.duration(checkOut.diff(checkIn));
-        
-        totalWorkHours += Math.floor(duration.asHours());
-        totalWorkMinutes += duration.minutes();
+      // 근무 시간 계산 (세션의 총 근무 시간 사용)
+      if (record.totalMinutes) {
+        totalWorkMinutes += record.totalMinutes;
         
         // 지각 체크 (9시 이후)
-        if (checkIn.format('HH:mm') > '09:00') {
+        if (record.checkIn && moment(`${record.date} ${record.checkIn}`).format('HH:mm') > '09:00') {
           lateCount++;
         }
         
         // 조퇴 체크 (18시 이전)
-        if (checkOut.format('HH:mm') < '18:00') {
+        if (record.checkOut && moment(`${record.date} ${record.checkOut}`).format('HH:mm') < '18:00') {
           earlyLeaveCount++;
         }
       }
@@ -216,8 +211,8 @@ class AttendanceManager {
       !recordDates.includes(day) && moment(day).isSameOrBefore(moment())
     );
     
-    // 총 근무 시간 정리
-    totalWorkHours += Math.floor(totalWorkMinutes / 60);
+    // 총 근무 시간 정리 (분 단위에서 시간/분으로 변환)
+    totalWorkHours = Math.floor(totalWorkMinutes / 60);
     totalWorkMinutes = totalWorkMinutes % 60;
     
     return {
@@ -225,7 +220,7 @@ class AttendanceManager {
       totalWorkDays,
       totalWorkHours: `${totalWorkHours}시간 ${totalWorkMinutes}분`,
       averageWorkHours: totalWorkDays > 0 
-        ? `${Math.floor(totalWorkHours / totalWorkDays)}시간 ${Math.floor(totalWorkMinutes / totalWorkDays)}분`
+        ? `${Math.floor((totalWorkHours * 60 + totalWorkMinutes) / totalWorkDays / 60)}시간 ${Math.floor(((totalWorkHours * 60 + totalWorkMinutes) / totalWorkDays) % 60)}분`
         : '0시간',
       lateCount,
       earlyLeaveCount,
