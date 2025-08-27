@@ -107,32 +107,36 @@ class SlackUI {
     // 액션 버튼들
     const actionElements = [];
 
-    if (!todayStatus.checkIn && !todayStatus.isWeekend) {
-      actionElements.push({
-        type: 'button',
-        text: {
-          type: 'plain_text',
-          text: '출근하기',
-          emoji: true
-        },
-        style: 'primary',
-        action_id: 'check_in',
-        value: userId
-      });
-    }
+    if (!todayStatus.isWeekend) {
+      // 활성 세션이 없으면 출근 버튼 표시
+      if (!todayStatus.activeSession) {
+        actionElements.push({
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: todayStatus.totalSessions > 0 ? '다음 세션 출근' : '출근하기',
+            emoji: true
+          },
+          style: 'primary',
+          action_id: 'check_in',
+          value: userId
+        });
+      }
 
-    if (todayStatus.checkIn && !todayStatus.checkOut && !todayStatus.isWeekend) {
-      actionElements.push({
-        type: 'button',
-        text: {
-          type: 'plain_text',
-          text: '퇴근하기',
-          emoji: true
-        },
-        style: 'danger',
-        action_id: 'check_out',
-        value: userId
-      });
+      // 활성 세션이 있으면 퇴근 버튼 표시
+      if (todayStatus.activeSession) {
+        actionElements.push({
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: `세션 #${todayStatus.activeSession.sessionNumber} 퇴근`,
+            emoji: true
+          },
+          style: 'danger',
+          action_id: 'check_out',
+          value: userId
+        });
+      }
     }
 
     actionElements.push({
@@ -191,13 +195,31 @@ class SlackUI {
       }
     ];
 
-    // 출근 상태 표시
-    if (todayStatus.checkIn) {
+    // 세션 상태 표시
+    if (todayStatus.totalSessions > 0) {
+      let statusText = `📊 *총 세션:* ${todayStatus.totalSessions}개 (완료: ${todayStatus.completedSessions}개)\n`;
+      
+      if (todayStatus.checkIn) {
+        statusText += `✅ *첫 출근:* ${todayStatus.checkIn}\n`;
+      }
+      
+      if (todayStatus.checkOut) {
+        statusText += `✅ *마지막 퇴근:* ${todayStatus.checkOut}\n`;
+      }
+      
+      if (todayStatus.workHours) {
+        statusText += `⏱️ *총 근무시간:* ${todayStatus.workHours}\n`;
+      }
+      
+      if (todayStatus.activeSession) {
+        statusText += `🏢 *현재 세션 #${todayStatus.activeSession.sessionNumber}* 진행 중 (${todayStatus.activeSession.checkIn}~)`;
+      }
+      
       blocks.push({
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `✅ *출근 시간:* ${todayStatus.checkIn}`
+          text: statusText.trim()
         }
       });
     } else if (!todayStatus.isWeekend) {
@@ -205,26 +227,7 @@ class SlackUI {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: '⏰ *출근 전입니다*'
-        }
-      });
-    }
-
-    // 퇴근 상태 표시
-    if (todayStatus.checkOut) {
-      blocks.push({
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `✅ *퇴근 시간:* ${todayStatus.checkOut}\n*근무 시간:* ${todayStatus.workHours}`
-        }
-      });
-    } else if (todayStatus.checkIn) {
-      blocks.push({
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: '🏢 *근무 중입니다*'
+          text: '⏰ *아직 출근 기록이 없습니다*'
         }
       });
     }

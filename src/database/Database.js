@@ -21,19 +21,20 @@ class Database {
   async initialize() {
     return new Promise((resolve, reject) => {
       this.db.serialize(() => {
-        // 출퇴근 테이블
+        // 출퇴근 세션 테이블 (여러 세션 지원)
         this.db.run(`
-          CREATE TABLE IF NOT EXISTS attendance (
+          CREATE TABLE IF NOT EXISTS attendance_sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             userId TEXT NOT NULL,
             date TEXT NOT NULL,
+            sessionNumber INTEGER NOT NULL,
             checkIn TEXT,
             checkOut TEXT,
-            workHours TEXT,
+            workMinutes INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'checked_in', -- 'checked_in' or 'checked_out'
             isManual BOOLEAN DEFAULT 0,
             createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(userId, date)
+            updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
           )
         `);
 
@@ -258,6 +259,113 @@ class Database {
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
+        }
+      );
+    });
+  }
+
+  /**
+   * 새로운 출근 세션 시작
+   */
+  async startNewSession(userId, date, time) {
+    return new Promise((resolve, reject) => {
+      // 오늘의 다음 세션 번호 조회
+      this.db.get(
+        `SELECT COALESCE(MAX(sessionNumber), 0) + 1 as nextSession 
+         FROM attendance_sessions 
+         WHERE userId = ? AND date = ?`,
+        [userId, date],
+        (err, row) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          
+          const sessionNumber = row.nextSession;
+          
+          // 새 세션 시작
+          this.db.run(
+            `INSERT INTO attendance_sessions 
+             (userId, date, sessionNumber, checkIn, status) 
+             VALUES (?, ?, ?, ?, 'checked_in')`,
+            [userId, date, sessionNumber, time],
+            function(err) {
+              if (err) reject(err);
+              else resolve({ sessionId: this.lastID, sessionNumber });
+            }
+          );
+        }
+      );
+    });
+  }
+
+  /**
+   * 현재 활성 세션 조회
+   */
+  async getActiveSession(userId, date) {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        `SELECT * FROM attendance_sessions 
+         WHERE userId = ? AND date = ? AND status = 'checked_in' 
+         ORDER BY sessionNumber DESC LIMIT 1`,
+        [userId, date],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+  }
+
+  /**
+   * 세션 퇴근 처리
+   */
+  async endSession(sessionId, checkOutTime, workMinutes) {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        `UPDATE attendance_sessions 
+         SET checkOut = ?, workMinutes = ?, status = 'checked_out', updatedAt = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [checkOutTime, workMinutes, sessionId],
+        function(err) {
+          if (err) reject(err);
+          else resolve(this.changes);
+        }
+      );
+    });
+  }
+
+  /**
+   * 오늘의 모든 세션 조회
+   */
+  async getTodaySessions(userId, date) {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        `SELECT * FROM attendance_sessions 
+         WHERE userId = ? AND date = ? 
+         ORDER BY sessionNumber ASC`,
+        [userId, date],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+  }
+
+  /**
+   * 오늘의 총 근무시간 계산
+   */
+  async getTotalWorkMinutesToday(userId, date) {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        `SELECT SUM(workMinutes) as totalMinutes 
+         FROM attendance_sessions 
+         WHERE userId = ? AND date = ? AND status = 'checked_out'`,
+        [userId, date],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row?.totalMinutes || 0);
         }
       );
     });

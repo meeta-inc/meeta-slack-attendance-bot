@@ -7,25 +7,23 @@ class AttendanceManager {
   }
 
   /**
-   * 출근 처리
+   * 출근 처리 (새 세션 시작)
    */
   async checkIn(userId, selectedTaskIds = []) {
     const now = moment();
     const date = now.format('YYYY-MM-DD');
     const time = now.format('HH:mm:ss');
     
-    // 이미 출근했는지 확인
-    const existing = await this.db.getAttendance(userId, date);
-    if (existing && existing.checkIn) {
-      throw new Error('이미 출근 처리되었습니다.');
+    // 이미 활성 세션이 있는지 확인
+    const activeSession = await this.db.getActiveSession(userId, date);
+    if (activeSession) {
+      throw new Error(`이미 세션 #${activeSession.sessionNumber}이(가) 진행 중입니다. 먼저 퇴근 처리를 해주세요.`);
     }
     
-    // 출근 기록 저장
-    await this.db.saveCheckIn(userId, date, time);
+    // 새 세션 시작
+    const session = await this.db.startNewSession(userId, date, time);
     
-    // 선택된 태스크 ID는 저장하지 않음 (퇴근 시 다시 선택)
-    
-    // Notion에도 동기화
+    // Notion에도 동기화 (기존 방식과 호환)
     if (this.notion) {
       await this.notion.syncCheckIn(userId, date, time);
     }
@@ -33,48 +31,51 @@ class AttendanceManager {
     return {
       date,
       time,
-      message: '출근이 정상적으로 처리되었습니다.',
+      sessionNumber: session.sessionNumber,
+      message: `세션 #${session.sessionNumber} 출근이 정상적으로 처리되었습니다.`,
       selectedTasks: selectedTaskIds.length
     };
   }
 
   /**
-   * 퇴근 처리
+   * 퇴근 처리 (현재 세션 종료)
    */
   async checkOut(userId) {
     const now = moment();
     const date = now.format('YYYY-MM-DD');
     const time = now.format('HH:mm:ss');
     
-    // 출근 기록 확인
-    const attendance = await this.db.getAttendance(userId, date);
-    if (!attendance || !attendance.checkIn) {
-      throw new Error('출근 기록이 없습니다. 먼저 출근 처리를 해주세요.');
-    }
-    
-    if (attendance.checkOut) {
-      throw new Error('이미 퇴근 처리되었습니다.');
+    // 활성 세션 확인
+    const activeSession = await this.db.getActiveSession(userId, date);
+    if (!activeSession) {
+      throw new Error('진행 중인 세션이 없습니다. 먼저 출근 처리를 해주세요.');
     }
     
     // 근무 시간 계산
-    const checkInTime = moment(`${date} ${attendance.checkIn}`);
+    const checkInTime = moment(`${date} ${activeSession.checkIn}`);
     const checkOutTime = moment(`${date} ${time}`);
-    const duration = moment.duration(checkOutTime.diff(checkInTime));
-    const workHours = `${Math.floor(duration.asHours())}시간 ${duration.minutes()}분`;
+    const durationMinutes = Math.round(checkOutTime.diff(checkInTime, 'minutes'));
+    const workHours = `${Math.floor(durationMinutes / 60)}시간 ${durationMinutes % 60}분`;
     
-    // 퇴근 기록 저장
-    await this.db.saveCheckOut(userId, date, time, workHours);
+    // 세션 종료
+    await this.db.endSession(activeSession.id, time, durationMinutes);
     
-    // Notion에도 동기화
+    // 오늘의 총 근무시간 계산
+    const totalMinutes = await this.db.getTotalWorkMinutesToday(userId, date);
+    const totalHours = `${Math.floor(totalMinutes / 60)}시간 ${totalMinutes % 60}분`;
+    
+    // Notion에도 동기화 (기존 방식과 호환)
     if (this.notion) {
-      await this.notion.syncCheckOut(userId, date, time, workHours);
+      await this.notion.syncCheckOut(userId, date, time, totalHours);
     }
     
     return {
       date,
       time,
+      sessionNumber: activeSession.sessionNumber,
       workHours,
-      message: '퇴근이 정상적으로 처리되었습니다.'
+      totalWorkHours: totalHours,
+      message: `세션 #${activeSession.sessionNumber} 퇴근이 정상적으로 처리되었습니다.`
     };
   }
 
@@ -127,17 +128,32 @@ class AttendanceManager {
   }
 
   /**
-   * 오늘의 출퇴근 상태 조회
+   * 오늘의 출퇴근 상태 조회 (세션 기반)
    */
   async getTodayStatus(userId) {
     const today = moment().format('YYYY-MM-DD');
-    const attendance = await this.db.getAttendance(userId, today);
+    const sessions = await this.db.getTodaySessions(userId, today);
+    const activeSession = await this.db.getActiveSession(userId, today);
+    const totalMinutes = await this.db.getTotalWorkMinutesToday(userId, today);
+    
+    // 총 근무시간
+    const totalHours = totalMinutes > 0 ? `${Math.floor(totalMinutes / 60)}시간 ${totalMinutes % 60}분` : null;
+    
+    // 첫 출근 시간과 마지막 퇴근 시간
+    const firstSession = sessions[0];
+    const lastCompletedSession = sessions.filter(s => s.status === 'checked_out').pop();
     
     return {
       date: today,
-      checkIn: attendance?.checkIn || null,
-      checkOut: attendance?.checkOut || null,
-      workHours: attendance?.workHours || null,
+      checkIn: firstSession?.checkIn || null,
+      checkOut: lastCompletedSession?.checkOut || null,
+      workHours: totalHours,
+      activeSession: activeSession ? {
+        sessionNumber: activeSession.sessionNumber,
+        checkIn: activeSession.checkIn
+      } : null,
+      totalSessions: sessions.length,
+      completedSessions: sessions.filter(s => s.status === 'checked_out').length,
       isWeekend: moment().day() === 0 || moment().day() === 6
     };
   }
