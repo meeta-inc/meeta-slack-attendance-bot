@@ -9,6 +9,9 @@ GitHub Actions에서 AWS 리소스에 접근하기 위해 필요합니다.
 |------------|------|------|
 | `AWS_ACCESS_KEY_ID` | IAM 사용자 액세스 키 | `AKIAIOSFODNN7EXAMPLE` |
 | `AWS_SECRET_ACCESS_KEY` | IAM 사용자 시크릿 키 | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
+| `AWS_ACCOUNT_ID` | AWS 계정 ID | `123456789012` |
+| `AWS_REGION` | AWS 리전 | `ap-northeast-1` |
+| `DOCKER_REGISTRY` | ECR 레지스트리 URL | `{account-id}.dkr.ecr.ap-northeast-1.amazonaws.com` |
 
 ### 2. Slack/Notion Secrets (선택)
 AWS Secrets Manager를 사용하는 경우 불필요합니다.
