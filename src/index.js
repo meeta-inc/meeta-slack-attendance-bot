@@ -15,8 +15,11 @@ const app = new App({
   signingSecret: process.env.SLACK_SIGNING_SECRET,
   socketMode: true,
   appToken: process.env.SLACK_APP_TOKEN,
-  port: process.env.PORT || 3000
+  port: process.env.PORT || 3000,
+  logLevel: 'DEBUG'
 });
+
+console.log('App initialized with Socket Mode');
 
 // 서비스 초기화
 const db = new Database();
@@ -55,6 +58,63 @@ app.event('app_mention', async ({ event, client, logger }) => {
   }
 });
 
+// DM에서 메시지를 받았을 때 처리
+app.message(async ({ message, client, logger }) => {
+  console.log('Message received:', {
+    channel: message.channel,
+    channel_type: message.channel_type,
+    text: message.text,
+    user: message.user,
+    bot_id: message.bot_id,
+    subtype: message.subtype
+  });
+  
+  try {
+    // DM 채널이 아니면 무시
+    if (message.channel_type !== 'im') {
+      console.log('Not a DM, ignoring');
+      return;
+    }
+    
+    // 봇 자신의 메시지는 무시
+    if (message.bot_id || message.subtype) {
+      console.log('Bot message or subtype, ignoring');
+      return;
+    }
+    
+    const userId = message.user;
+    const todayStatus = await attendanceManager.getTodayStatus(userId);
+    
+    console.log('DM Message Event:', {
+      channel: message.channel,
+      channel_type: message.channel_type,
+      user: userId,
+      text: message.text,
+      todayStatus
+    });
+    
+    const blocks = slackUI.getChannelMessage(userId, todayStatus);
+    console.log('Generated blocks:', JSON.stringify(blocks, null, 2));
+    
+    // DM에서 출퇴근 관리 메뉴 표시
+    const result = await client.chat.postMessage({
+      channel: message.channel,
+      text: '출퇴근 관리 메뉴입니다.',
+      blocks: blocks
+    });
+    
+    console.log('Message sent result:', {
+      ok: result.ok,
+      ts: result.ts,
+      channel: result.channel,
+      message: result.message
+    });
+  } catch (error) {
+    logger.error('Error handling DM message:', error);
+    console.error('DM Error details:', error);
+  }
+});
+
 // 출근 버튼 클릭
 app.action('check_in', async ({ body, ack, client, logger }) => {
   await ack();
@@ -74,7 +134,7 @@ app.action('check_in', async ({ body, ack, client, logger }) => {
       const channel = body.channel?.id || userId;
       await client.chat.postMessage({
         channel: channel,
-        text: `✅ <@${userId}>님 출근 완료! (${result.time})\n\n할당된 태스크가 없어 태스크 선택을 건너뛰었습니다.`
+        text: `✅ <@${userId}>님 세션 #${result.sessionNumber} 출근 완료! (${result.time})\n\n할당된 태스크가 없어 태스크 선택을 건너뛰었습니다.`
       });
       
       // 채널 메시지 업데이트 (채널인 경우)
@@ -121,7 +181,7 @@ app.action('check_out', async ({ body, ack, client, logger }) => {
       const channel = body.channel?.id || userId;
       await client.chat.postMessage({
         channel: channel,
-        text: `✅ <@${userId}>님 퇴근 완료! (${result.time})\n오늘 근무 시간: ${result.workHours}\n\n할당된 태스크가 없어 작업 기록을 건너뛰었습니다.`
+        text: `✅ <@${userId}>님 세션 #${result.sessionNumber} 퇴근 완료! (${result.time})\n세션 근무 시간: ${result.workHours}\n오늘 총 근무 시간: ${result.totalWorkHours}\n\n할당된 태스크가 없어 작업 기록을 건너뛰었습니다.`
       });
       
       // 채널 메시지 업데이트 (채널인 경우)
